@@ -10,6 +10,8 @@ import (
 func Customer(router *gin.Engine, cc controller.CustomerController) {
 	customerRoutes := router.Group("/customers")
 	{
+		customerRoutes.GET("/",cc.GetAllCustomer)
+		customerRoutes.GET("/:id",cc.GetDetailCustomer)
 		customerRoutes.POST("/", cc.CreateCustomer)
 	}
 }
