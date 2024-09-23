@@ -11,6 +11,7 @@ type CustomerRepository interface {
 	CreateCustomer(customer *entity.Customer) (*entity.Customer, error)
 	GetCustomer() (*sql.Rows, error)
 	GetDetailCustomer(id int,customer *entity.Customer) (*entity.Customer,error)
+	UpdateCustomer(id int,customer *entity.Customer) (*entity.Customer,error)
 }
 
 type customerRepository struct {
@@ -57,4 +58,13 @@ func (cr *customerRepository) GetDetailCustomer(id int,customer *entity.Customer
 	}
 
 	return customer , nil
+}
+
+func (cr *customerRepository) UpdateCustomer(id int,customer *entity.Customer) (*entity.Customer,error) {
+	update := "UPDATE customer SET name = $2,phone_number = $3,address = $4 WHERE customer_id = $1"
+	_, err := cr.DB.Exec(update,id,customer.Name,customer.Phone_number,customer.Address)
+	if err != nil {
+		return customer,err
+	}
+	return customer,nil
 }

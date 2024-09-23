@@ -13,5 +13,6 @@ func Customer(router *gin.Engine, cc controller.CustomerController) {
 		customerRoutes.GET("/",cc.GetAllCustomer)
 		customerRoutes.GET("/:id",cc.GetDetailCustomer)
 		customerRoutes.POST("/", cc.CreateCustomer)
+		customerRoutes.PUT("/:id",cc.UpdateCustomer)
 	}
 }

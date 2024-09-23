@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"submission-project-enigma-laundry/entity"
 	"submission-project-enigma-laundry/repository"
 	"github.com/gin-gonic/gin"
@@ -12,16 +13,12 @@ type CustomerController interface {
 	CreateCustomer(ctx *gin.Context)
 	GetAllCustomer(ctx *gin.Context)
 	GetDetailCustomer(ctx *gin.Context)
+	UpdateCustomer(ctx *gin.Context)
 }
 
 type CustomerResponse struct {
 	Message string `json:"message"`
-	Data  struct {
-		Customer_id int `json:"id"`
-		Name string `json:"name"`
-		Phone_number string `json:"phoneNumber"`
-		Address string `json:"address"`
-	} `json:"data"`
+	Data  entity.Customer
 }
 
 type CustomerResponseSlice struct {
@@ -54,11 +51,8 @@ func (cc *customerController) CreateCustomer(ctx *gin.Context) {
 	// Create The response struct 
 	response := CustomerResponse{
 		Message: "Successfuly Create Customer",
+		Data: *createdCustomer,
 	}
-	response.Data.Customer_id = createdCustomer.Customer_id
-	response.Data.Name = createdCustomer.Name
-	response.Data.Phone_number = createdCustomer.Phone_number
-	response.Data.Address = createdCustomer.Address
 
 	ctx.JSON(http.StatusCreated, response)
 }
@@ -103,7 +97,7 @@ func (cc *customerController) GetDetailCustomer(ctx *gin.Context) {
 	
 	convertedId,err := strconv.Atoi(id)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed convert id. Make sure id is number", "details" : err})
+		ctx.JSON(http.StatusBadRequest, gin.H{"message" : "Failed convert id. Make sure id is number", "details" : err.Error()})
 		return
 	}
 
@@ -111,18 +105,66 @@ func (cc *customerController) GetDetailCustomer(ctx *gin.Context) {
 
 	detailCustomer, err := cc.CustomerRepository.GetDetailCustomer(convertedId,&customer)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed to get detail customer data", "details" : err})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed to get detail customer data", "details" : err.Error()})
 		return
 	}
 
 	// Create The response struct 
 	response := CustomerResponse{
 		Message: "Successfuly Get Customer Detail",
+		Data: *detailCustomer,
 	}
-	response.Data.Customer_id = detailCustomer.Customer_id
-	response.Data.Name = detailCustomer.Name
-	response.Data.Phone_number = detailCustomer.Phone_number
-	response.Data.Address = detailCustomer.Address
-
+	
 	ctx.JSON(http.StatusCreated, response)
 }
+
+func (cc *customerController) UpdateCustomer(ctx *gin.Context) {
+	id := ctx.Param("id")
+  
+	convertedId, err := strconv.Atoi(id)
+	if err != nil {
+	  ctx.JSON(http.StatusBadRequest, gin.H{"message": "Failed convert id. Make sure id is number", "details": err.Error()})
+	  return
+	}
+  
+	customer := entity.Customer{}
+  
+	detailCustomer, err := cc.CustomerRepository.GetDetailCustomer(convertedId, &customer)
+	if err != nil {
+	  ctx.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to get customer data", "details": err.Error()})
+	  return
+	}
+
+	updateCustomer := entity.Customer{}
+  
+	err = ctx.ShouldBind(&updateCustomer)
+	if err != nil {
+	  ctx.JSON(http.StatusBadRequest, gin.H{"message": "Invalid Input", "details": err.Error()})
+	  return
+	}
+  
+	// Update existing customer data
+	if strings.TrimSpace(updateCustomer.Name) != "" {
+	  detailCustomer.Name = updateCustomer.Name
+	}
+	if strings.TrimSpace(updateCustomer.Phone_number) != "" {
+	  detailCustomer.Phone_number = updateCustomer.Phone_number
+	}
+	if strings.TrimSpace(updateCustomer.Address) != "" {
+	  detailCustomer.Address = updateCustomer.Address
+	}
+  
+	updatedCustomer, err := cc.CustomerRepository.UpdateCustomer(convertedId,detailCustomer) // Assuming UpdateCustomer function exists
+	if err != nil {
+	  ctx.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update customer data", "details": err.Error()})
+	  return
+	}
+  
+	// Create The response struct 
+	response := CustomerResponse{
+	  Message: "Successfully Updated Customer Data",
+	  Data: *updatedCustomer,
+	}
+  
+	ctx.JSON(http.StatusOK, response) // Updated status code to 200 (OK)
+  }
