@@ -8,10 +8,13 @@ import (
 )
 
 type CustomerRepository interface {
-	CreateCustomer(customer *entity.Customer) (*entity.Customer, error)
 	GetCustomer() (*sql.Rows, error)
 	GetDetailCustomer(id int,customer *entity.Customer) (*entity.Customer,error)
+	IsCustomerExist(id int,customer *entity.Customer) (bool,error)
+	CustomerInTransaction(customerId int,transaction *entity.Transaction)  (bool,error)
+	CreateCustomer(customer *entity.Customer) (*entity.Customer, error)	
 	UpdateCustomer(id int,customer *entity.Customer) (*entity.Customer,error)
+	DeleteCustomer(id int) (bool,error)
 }
 
 type customerRepository struct {
@@ -21,6 +24,42 @@ type customerRepository struct {
 func NewCustomerRepo(db *sql.DB) CustomerRepository {
 	return &customerRepository{DB: db}
 }
+
+func (cr *customerRepository) IsCustomerExist(id int, customer *entity.Customer) (bool, error) {
+	query := "SELECT customer_id FROM customer WHERE customer_id = $1"
+	
+	// Execute the query and scan the result
+	err := cr.DB.QueryRow(query, id).Scan(&customer.Customer_id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No customer found
+			return false, nil // No error, just return false
+		}
+		// Return any other errors encountered
+		return false, err
+	}
+
+	// Customer exists
+	return true, nil
+}
+
+func (cr *customerRepository) CustomerInTransaction(customerId int,transaction *entity.Transaction)  (bool,error) {
+	query := "SELECT customer_id FROM transaction WHERE customer_id = $1"
+
+	err := cr.DB.QueryRow(query,customerId).Scan(&transaction.Customer_id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No customer found
+			return false, nil // No error, just return false
+		}
+		// Return any other errors encountered
+		return false, err
+	}
+
+	// Customer exists
+	return true, nil
+}
+
 
 func (cr *customerRepository) CreateCustomer(customer *entity.Customer) (*entity.Customer, error) {
 	// insert customer data into db
@@ -67,4 +106,17 @@ func (cr *customerRepository) UpdateCustomer(id int,customer *entity.Customer) (
 		return customer,err
 	}
 	return customer,nil
+}
+
+func (cr *customerRepository) DeleteCustomer(id int) (bool,error) {
+	query := "DELETE FROM customer WHERE customer_id = $1"
+	// Execute the query and scan the result
+	_,err := cr.DB.Exec(query,id)
+	if err != nil {
+		// Return any other errors encountered
+		return false, err
+	}
+
+	// Customer exists
+	return true, nil
 }

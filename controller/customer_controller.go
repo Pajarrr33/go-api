@@ -14,6 +14,7 @@ type CustomerController interface {
 	GetAllCustomer(ctx *gin.Context)
 	GetDetailCustomer(ctx *gin.Context)
 	UpdateCustomer(ctx *gin.Context)
+	DeleteCustomer(ctx *gin.Context)
 }
 
 type CustomerResponse struct {
@@ -115,7 +116,7 @@ func (cc *customerController) GetDetailCustomer(ctx *gin.Context) {
 		Data: *detailCustomer,
 	}
 	
-	ctx.JSON(http.StatusCreated, response)
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (cc *customerController) UpdateCustomer(ctx *gin.Context) {
@@ -168,3 +169,53 @@ func (cc *customerController) UpdateCustomer(ctx *gin.Context) {
   
 	ctx.JSON(http.StatusOK, response) // Updated status code to 200 (OK)
   }
+
+func (cc *customerController) DeleteCustomer(ctx *gin.Context) {
+	id := ctx.Param("id")
+  
+	convertedId, err := strconv.Atoi(id)
+	if err != nil {
+	  ctx.JSON(http.StatusBadRequest, gin.H{"message": "Failed convert id. Make sure id is number", "details": err.Error()})
+	  return
+	}
+
+	customer := entity.Customer{}
+
+	isCustomerExist,err := cc.CustomerRepository.IsCustomerExist(convertedId,&customer)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error While Checking Customer", "details" : err.Error()})
+		return
+	}
+	if !isCustomerExist {
+		ctx.JSON(http.StatusNotFound, gin.H{"message" : "customer not found"})
+		return
+	}
+
+	transaction := entity.Transaction{}
+
+	isCustomerInTransaction,err := cc.CustomerRepository.CustomerInTransaction(convertedId,&transaction)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError,gin.H{"message" : "Error While Checking Customer in Transacrion", "details" : err.Error()})
+		return
+	} 
+	if isCustomerInTransaction {
+		ctx.JSON(http.StatusConflict,gin.H{"message" : "Customer is being used in transaction. Please delete the transaction first"})
+		return
+	}
+
+	_,err = cc.CustomerRepository.DeleteCustomer(convertedId)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error Deleting Customer", "details" :err.Error()})
+		return
+	}
+
+	response := struct {
+		Message string `json:"message"`
+		Data string `json:"data"`
+	}{
+		Message: "Successfully deleted data",
+		Data: "OK",
+	}
+
+	ctx.JSON(http.StatusOK,response)
+}
