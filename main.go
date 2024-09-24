@@ -19,15 +19,18 @@ func main() {
 		// Implement Dependency Injection
 		// Repository
 		customerRepository repository.CustomerRepository = repository.NewCustomerRepo(db)
+		employeeRepository repository.EmployeeRepository = repository.NewEmployeeRepo(db)
 
 		// Controller
 		customerController controller.CustomerController = controller.NewCustomerController(customerRepository)
+		employeeController controller.EmployeeController = controller.NewEmployeeController(employeeRepository)
 	)
 
 	server := gin.Default()
 
 	// Routes
 	routes.Customer(server,customerController)
+	routes.Employee(server,employeeController)
 
 	server.Run(":8080")
 }
