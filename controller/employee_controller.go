@@ -191,7 +191,7 @@ func (ec *employeeController) UpdateEmployee(ctx *gin.Context) {
 
 	isEmployeeInTransaction,err := ec.employeeRepository.EmployeeInTransaction(convertedId,&transaction)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError,gin.H{"message" : "Error While Checking Employee in Transacrion", "details" : err.Error()})
+		ctx.JSON(http.StatusInternalServerError,gin.H{"message" : "Error While Checking Employee in Transaction", "details" : err.Error()})
 		return
 	} 
 	if isEmployeeInTransaction {

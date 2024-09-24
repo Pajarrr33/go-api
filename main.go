@@ -20,10 +20,12 @@ func main() {
 		// Repository
 		customerRepository repository.CustomerRepository = repository.NewCustomerRepo(db)
 		employeeRepository repository.EmployeeRepository = repository.NewEmployeeRepo(db)
+		productRepository repository.ProductRepository = repository.NewProductRepo(db)
 
 		// Controller
 		customerController controller.CustomerController = controller.NewCustomerController(customerRepository)
 		employeeController controller.EmployeeController = controller.NewEmployeeController(employeeRepository)
+		productController controller.ProductController = controller.NewProductController(productRepository)
 	)
 
 	server := gin.Default()
@@ -31,6 +33,7 @@ func main() {
 	// Routes
 	routes.Customer(server,customerController)
 	routes.Employee(server,employeeController)
+	routes.Product(server,productController)
 
 	server.Run(":8080")
 }

@@ -195,7 +195,7 @@ func (cc *customerController) DeleteCustomer(ctx *gin.Context) {
 
 	isCustomerInTransaction,err := cc.CustomerRepository.CustomerInTransaction(convertedId,&transaction)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError,gin.H{"message" : "Error While Checking Customer in Transacrion", "details" : err.Error()})
+		ctx.JSON(http.StatusInternalServerError,gin.H{"message" : "Error While Checking Customer in Transaction", "details" : err.Error()})
 		return
 	} 
 	if isCustomerInTransaction {
