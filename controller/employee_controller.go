@@ -23,12 +23,12 @@ type employeeController struct {
 
 type EmployeeResponse struct {
 	Message string `json:"message"`
-	Data entity.Employee
+	Data entity.Employee `json:"data"`
 }
 
 type EmployeeResponseSlice struct {
 	Message string `json:"message"`
-	Data []entity.Employee
+	Data []entity.Employee `json:"data"`
 }
 
 func NewEmployeeController(repo repository.EmployeeRepository) EmployeeController {

@@ -23,12 +23,12 @@ type productController struct {
 
 type ProductResponse struct {
 	Message string `json:"message"`
-	Data entity.Product
+	Data entity.Product `json:"data"`
 }
 
 type ProductResponseSlice struct {
 	Message string `json:"message"`
-	Data []entity.Product
+	Data []entity.Product `json:"data"`
 }
 
 func NewProductController(repo repository.ProductRepository) ProductController {

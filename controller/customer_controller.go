@@ -19,12 +19,12 @@ type CustomerController interface {
 
 type CustomerResponse struct {
 	Message string `json:"message"`
-	Data  entity.Customer
+	Data  entity.Customer `json:"data"`
 }
 
 type CustomerResponseSlice struct {
 	Message string `json:"message"`
-	Data []entity.Customer
+	Data []entity.Customer `json:"data"`
 }
 
 type customerController struct {
