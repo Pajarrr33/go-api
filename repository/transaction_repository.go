@@ -4,11 +4,15 @@ import (
 	"database/sql"
 	"submission-project-enigma-laundry/entity"
 	"fmt"
+	"errors"
 	_ "github.com/lib/pq"
 )
 
 type TransactionRepository interface {
 	CreateTransaction(transaction *entity.Transaction) (*entity.Transaction,error)
+	GetTransaction(transaction *entity.Transaction,id int) (*entity.Transaction,error)
+	IsTransactionExist(id int)(bool, error)
+	IsTransactionDetailExist(id int) (bool, error)
 }
 
 type transactionRepository struct {
@@ -62,4 +66,56 @@ func (tr *transactionRepository) CreateTransaction(transaction *entity.Transacti
 	}
 
 	return transaction,nil
+}
+
+func (tr *transactionRepository) IsTransactionExist(id int) (bool, error) {
+	query := "SELECT transaction_id FROM transaction WHERE transaction_id = $1"
+
+	// Execute the query and scan the result
+	err := tr.DB.QueryRow(query, id).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No transaction found
+			return false, nil // No error, just return false
+		}
+		// Return any other errors encountered
+		return false, err
+	}
+
+	// transaction exists
+	return true, nil
+}
+
+func (tr *transactionRepository) IsTransactionDetailExist(id int) (bool, error) {
+	query := "SELECT transaction_id FROM transaction_detail WHERE transaction_id = $1"
+
+	// Execute the query and scan the result
+	err := tr.DB.QueryRow(query, id).Scan(&id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No transaction Detail found
+			return false, nil // No error, just return false
+		}
+		// Return any other errors encountered
+		return false, err
+	}
+
+	// transaction detail exists
+	return true, nil
+}
+
+func (tr *transactionRepository) GetTransaction(transaction *entity.Transaction,id int) (*entity.Transaction,error) {
+	query := "SELECT t.transaction_id,t.bill_date,t.entry_date,t.finish_date,e.employee_id,e.name,e.phone_number,e.address,c.customer_id,c.name,c.phone_number,c.address,td.transaction_detail_id,td.transaction_id,td.product_price,td.qty,p.product_id,p.product_name,p.price,p.unit,p.price * td.qty AS total_bill FROM transaction AS t INNER JOIN employee AS e ON t.employee_id = e.employee_id INNER JOIN customer AS c ON t.customer_id = c.customer_id INNER JOIN transaction_detail AS td ON t.transaction_id = td.transaction_id INNER JOIN product AS p ON td.product_id = p.product_id WHERE t.transaction_id = $1;"
+
+	err := tr.DB.QueryRow(query,id).Scan(&transaction.Transaction_id,&transaction.Bill_date,&transaction.Entry_date,&transaction.Finish_date,&transaction.Employee.Employee_id,&transaction.Employee.Name,&transaction.Employee.Phone_number,&transaction.Employee.Address,&transaction.Customer.Customer_id,&transaction.Customer.Name,&transaction.Customer.Phone_number,&transaction.Customer.Address,&transaction.Bill_detail[0].Transaction_detail_id,&transaction.Bill_detail[0].Transaction_id,&transaction.Bill_detail[0].Product_price,&transaction.Bill_detail[0].Qty,&transaction.Bill_detail[0].Product.Product_id,&transaction.Bill_detail[0].Product.Product_name,&transaction.Bill_detail[0].Product.Price,&transaction.Bill_detail[0].Product.Unit,&transaction.Total_bill)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = errors.New("transaction not found")
+			return transaction, err
+		}
+
+		return transaction, err
+	}
+
+	return transaction, nil
 }
