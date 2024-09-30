@@ -11,7 +11,8 @@ import (
 type TransactionRepository interface {
 	CreateTransaction(transaction *entity.Transaction) (*entity.Transaction,error)
 	GetTransaction(transaction *entity.Transaction,id int) (*entity.Transaction,error)
-	IsTransactionExist(id int)(bool, error)
+	ListTransaction(addtionalQuery string) (*sql.Rows, error)
+	IsTransactionExist(id int)(bool, error) 
 	IsTransactionDetailExist(id int) (bool, error)
 }
 
@@ -119,3 +120,30 @@ func (tr *transactionRepository) GetTransaction(transaction *entity.Transaction,
 
 	return transaction, nil
 }
+
+func (tr *transactionRepository)ListTransaction(addtionalQuery string) (*sql.Rows, error) {
+	query := `
+		SELECT t.transaction_id, t.bill_date, t.entry_date, t.finish_date, e.employee_id, e.name, e.phone_number, e.address,
+		       c.customer_id, c.name, c.phone_number, c.address, td.transaction_detail_id, td.transaction_id, 
+		       td.product_price, td.qty, p.product_id, p.product_name, p.price, p.unit, p.price * td.qty AS total_bill
+		FROM transaction AS t
+		INNER JOIN employee AS e ON t.employee_id = e.employee_id
+		INNER JOIN customer AS c ON t.customer_id = c.customer_id
+		INNER JOIN transaction_detail AS td ON t.transaction_id = td.transaction_id
+		INNER JOIN product AS p ON td.product_id = p.product_id
+	`
+	if addtionalQuery != ""{
+		query += addtionalQuery
+		rows, err := tr.DB.Query(query)
+			if err != nil {
+				return rows, err
+			}
+		return rows, nil
+	}
+	rows, err := tr.DB.Query(query)
+		if err != nil {
+			return rows, err
+		}
+	return rows, nil
+}
+

@@ -12,5 +12,6 @@ func Transaction(router *gin.Engine, tc controller.TransactionController) {
 	{
 		transactionRoutes.POST("/",tc.CreateTransaction)
 		transactionRoutes.GET("/:id_bill",tc.GetTransaction)
+		transactionRoutes.GET("/",tc.ListTransaction)
 	}
 }
