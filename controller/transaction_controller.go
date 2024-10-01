@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"submission-project-enigma-laundry/entity"
 	"submission-project-enigma-laundry/repository"
 	"time"
@@ -27,7 +26,7 @@ type CreatedTransactionResponse struct {
 		FinishDate string `json:"finishDate"`
 		EmployeeId string `json:"employeeId"`
 		CustomerId string `json:"customerId"`
-		BillDetails struct {
+		BillDetails []struct {
 			Id             string `json:"id"`
 			Transaction_id string    `json:"billId"`
 			Product_id     string `json:"productId"`
@@ -128,21 +127,24 @@ func (tc *transactionController) CreateTransaction(ctx *gin.Context) {
 		return
 	}
 
-	converIdProduct,err := strconv.Atoi(newTransaction.Bill_detail[0].Product_id)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": "Failed convert product id. Make sure product id is number", "details": err.Error()})
-		return
-	}
+	for _, billDetail := range newTransaction.Bill_detail {
+		converIdProduct,err := strconv.Atoi(billDetail.Product_id)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": "Failed convert product id. Make sure product id is number", "details": err.Error()})
+			return
+		}
 
-	isProductExist,err := tc.productRepository.IsProductExist(converIdProduct,&newTransaction.Bill_detail[0].Product)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error While Checking Product", "details" : err.Error()})
-		return
+		isProductExist,err := tc.productRepository.IsProductExist(converIdProduct,&billDetail.Product)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error While Checking Product", "details" : err.Error()})
+			return
+		}
+		if !isProductExist {
+			ctx.JSON(http.StatusNotFound, gin.H{"message" : "product not found"})
+			return
+		}
 	}
-	if !isProductExist {
-		ctx.JSON(http.StatusNotFound, gin.H{"message" : "product not found"})
-		return
-	}
+	
 
 	createdTransaction,err := tc.transactionRepository.CreateTransaction(&newTransaction) 
 	if err != nil {
@@ -161,11 +163,22 @@ func (tc *transactionController) CreateTransaction(ctx *gin.Context) {
 	response.Data.CustomerId = createdTransaction.Customer_id
 
 	// Insert data into the nested BillDetails struct
-	response.Data.BillDetails.Id = createdTransaction.Bill_detail[0].Transaction_detail_id
-	response.Data.BillDetails.Transaction_id = createdTransaction.Bill_detail[0].Transaction_id
-	response.Data.BillDetails.Product_id = createdTransaction.Bill_detail[0].Product_id
-	response.Data.BillDetails.Product_price = createdTransaction.Bill_detail[0].Product_price
-	response.Data.BillDetails.Qty = createdTransaction.Bill_detail[0].Qty
+	for _, billDetail := range createdTransaction.Bill_detail {
+		response.Data.BillDetails = append(response.Data.BillDetails, struct{
+			Id string "json:\"id\""; 
+			Transaction_id string "json:\"billId\""; 
+			Product_id string "json:\"productId\""; 
+			Product_price int "json:\"productPrice\""; 
+			Qty int "json:\"qty\""
+		}{
+			Id: billDetail.Transaction_detail_id,
+			Transaction_id: billDetail.Transaction_id,
+			Product_id: billDetail.Product_id,
+			Product_price: billDetail.Product_price,
+			Qty: billDetail.Qty,
+		})
+	}
+	
 	ctx.JSON(http.StatusCreated, response)
 }
 
@@ -229,70 +242,61 @@ func (tc *transactionController) GetTransaction(ctx *gin.Context) {
 	response.Data.Customer.Address = detailTransaction.Customer.Address
 
 	// Bill Details
-	response.Data.BillDetails = append(response.Data.BillDetails, struct{
-		Id string "json:\"id\""; 
-		Transaction_id string "json:\"billId\""; 
-		Product entity.Product "json:\"product\""; 
-		Product_price int "json:\"productPrice\""; 
-		Qty int "json:\"qty\""
-	}{
-		Id: detailTransaction.Bill_detail[0].Transaction_detail_id,
-		Transaction_id: detailTransaction.Bill_detail[0].Transaction_id,
-		// Product
-		Product: entity.Product{
-			Product_id: detailTransaction.Bill_detail[0].Product.Product_id,
-			Product_name: detailTransaction.Bill_detail[0].Product.Product_name,
-			Price: detailTransaction.Bill_detail[0].Product.Price,
-			Unit: detailTransaction.Bill_detail[0].Product.Unit,
-		},
-		Product_price: detailTransaction.Bill_detail[0].Product_price,
-		Qty: detailTransaction.Bill_detail[0].Qty,
-	})
-
+	// Insert data into the nested BillDetails struct
+	for _, billDetail := range detailTransaction.Bill_detail {
+		response.Data.BillDetails = append(response.Data.BillDetails, struct{
+			Id string "json:\"id\""; 
+			Transaction_id string "json:\"billId\""; 
+			Product entity.Product "json:\"product\""; 
+			Product_price int "json:\"productPrice\""; 
+			Qty int "json:\"qty\""
+		}{
+			Id: billDetail.Transaction_detail_id,
+			Transaction_id: billDetail.Transaction_id,
+			// Product
+			Product: entity.Product{
+				Product_id: billDetail.Product.Product_id,
+				Product_name: billDetail.Product.Product_name,
+				Price: billDetail.Product.Price,
+				Unit: billDetail.Product.Unit,
+			},
+			Product_price: billDetail.Product_price,
+			Qty: billDetail.Qty,
+		})
+	}
+	
 	ctx.JSON(http.StatusOK, response)
 }
 
 func (tc *transactionController) ListTransaction(ctx *gin.Context) {
 	transactions := []entity.Transaction{}
 
-	var condition []string
-	var conditionalQuery string
-	paramsCount := 0
+	var transactionQueryParam, transactionDetailQueryParam string
 
-	startDate := ctx.Query("startDate")
-	if startDate != "" {
-		parsedDate,err := time.Parse("02-01-2006",startDate)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"message" : "Failed convert start date. Make sure start date format is dd-MM-yyyy", "details" : err.Error()})
-			return
-		}
-		formatedDate := parsedDate.Format("2006-01-02")
-		condition = append(condition,fmt.Sprintf(`t.entry_date >= '%s'`,formatedDate))
-		paramsCount++
-	}
-	endDate := ctx.Query("endDate")
-	if endDate != "" {
-		parsedDate,err := time.Parse("02-01-2006",endDate)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"message" : "Failed convert end date. Make sure end date format is dd-MM-yyyy", "details" : err.Error()})
-			return
-		}
-		formatedDate := parsedDate.Format("2006-01-02")
-		condition = append(condition,fmt.Sprintf(`t.finish_date >= '%s'`,formatedDate))
-		paramsCount++
-	}
+    // Parse the start and end dates
+    startDate, err := parseDate(ctx.Query("startDate"), "start date")
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+        return
+    }
+    
+    endDate, err := parseDate(ctx.Query("endDate"), "end date")
+    if err != nil {
+        ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+        return
+    }
 
-	productName := ctx.Query("productName")
-	if productName != "" {
-		condition = append(condition,fmt.Sprintf(`p.product_name LIKE '%s'`,productName))
-		paramsCount++
-	}
-
-	if len(condition) > 0 {
-		conditionalQuery = " WHERE " + strings.Join(condition, " AND ")
-	}
-
-	rows,err := tc.transactionRepository.ListTransaction(conditionalQuery)
+    // Build the product query if productName is provided
+    productName := ctx.Query("productName")
+	// Build the transaction date query
+    if startDate != "" || endDate != "" || productName != ""{
+        transactionQueryParam = " WHERE " + buildDateQuery(startDate, endDate, productName)
+    }
+    if productName != "" {
+        transactionDetailQueryParam = " WHERE " + buildProductQuery(productName)
+    }
+	
+	rows,err := tc.transactionRepository.ListTransaction(transactionQueryParam)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed to get List Transaction", "details" : err.Error()})
 		return
@@ -302,7 +306,7 @@ func (tc *transactionController) ListTransaction(ctx *gin.Context) {
 
 	for rows.Next() {
 		transaction := entity.Transaction{}
-		err = rows.Scan(&transaction.Transaction_id,&transaction.Bill_date,&transaction.Entry_date,&transaction.Finish_date,&transaction.Employee.Employee_id,&transaction.Employee.Name,&transaction.Employee.Phone_number,&transaction.Employee.Address,&transaction.Customer.Customer_id,&transaction.Customer.Name,&transaction.Customer.Phone_number,&transaction.Customer.Address,&transaction.Bill_detail[0].Transaction_detail_id,&transaction.Bill_detail[0].Transaction_id,&transaction.Bill_detail[0].Product_price,&transaction.Bill_detail[0].Qty,&transaction.Bill_detail[0].Product.Product_id,&transaction.Bill_detail[0].Product.Product_name,&transaction.Bill_detail[0].Product.Price,&transaction.Bill_detail[0].Product.Unit,&transaction.Total_bill)
+		err = rows.Scan(&transaction.Transaction_id,&transaction.Bill_date,&transaction.Entry_date,&transaction.Finish_date,&transaction.Employee.Employee_id,&transaction.Employee.Name,&transaction.Employee.Phone_number,&transaction.Employee.Address,&transaction.Customer.Customer_id,&transaction.Customer.Name,&transaction.Customer.Phone_number,&transaction.Customer.Address)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed scanning transaction", "details" : err.Error()})
 			return
@@ -312,74 +316,168 @@ func (tc *transactionController) ListTransaction(ctx *gin.Context) {
 
 	err = rows.Err()
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error encountred during iteration", "details" : err.Error()})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error encountred during iteration transaction", "details" : err.Error()})
 		return
 	}
 
-	var response TransactionResponseSlice
-	response.Message = "Successfuly Get Transaction"
-	if response.Data == nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"message" : "transaction not found"})
+	rows,err = tc.transactionRepository.TransactionDetails(transactionDetailQueryParam)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed to get List Transaction detail", "details" : err.Error()})
 		return
 	}
-	
+
+	transaction_details := []entity.Transaction_detail{}
+	for rows.Next() {
+		transaction_detail := entity.Transaction_detail{}
+		err = rows.Scan(&transaction_detail.Transaction_detail_id,&transaction_detail.Transaction_id,&transaction_detail.Product_price,&transaction_detail.Qty,&transaction_detail.Product.Product_id,&transaction_detail.Product.Product_name,&transaction_detail.Product.Price,&transaction_detail.Product.Unit)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Failed scanning transaction detail", "details" : err.Error()})
+			return
+		}
+		transaction_details = append(transaction_details, transaction_detail)
+	}
+	err = rows.Err()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"message" : "Error encountred during iteration transaction", "details" : err.Error()})
+		return
+	}
+
+
+	for i := 0; i < len(transactions); i++ {
+		for j := 0; j < len(transaction_details); j++ {
+			// Check if the transaction_id matches
+			if transactions[i].Transaction_id == transaction_details[j].Transaction_id {
+				// Update the total bill
+				transactions[i].Total_bill += transaction_details[j].Product_price * transaction_details[j].Qty
+				
+				// Append the matching transaction detail to the Bill_detail slice
+				transactions[i].Bill_detail = append(transactions[i].Bill_detail, transaction_details[j])
+			}
+		}
+	}
+
+	var response TransactionResponseSlice
+	response.Message = "Successfully Get Transaction"
+
 	for _, transaction := range transactions {
-		response.Data = append(response.Data, struct{
-			Id string "json:\"id\""; 
-			BillDate string "json:\"billDate\""; 
-			EntryDate string "json:\"entryDate\""; 
-			FinishDate string "json:\"finishDate\""; 
-			Employee entity.Employee "json:\"employee\""; 
-			Customer entity.Customer "json:\"customer\""; 
-			BillDetails []struct{
-				Id string "json:\"id\""; 
-				Transaction_id string "json:\"billId\""; 
-				Product entity.Product "json:\"product\""; 
-				Product_price int "json:\"productPrice\""; 
-				Qty int "json:\"qty\""
-			} "json:\"billDetails\""; 
-			Total_bill int "json:\"totalBill\""
+		// Reinitialize billDetails for each transaction to ensure it's empty
+		var billDetails []struct {
+			Id             string        `json:"id"`
+			Transaction_id string        `json:"billId"`
+			Product        entity.Product `json:"product"`
+			Product_price  int           `json:"productPrice"`
+			Qty            int           `json:"qty"`
+		}
+
+		// Loop through the bill details of the current transaction
+		for _, detail := range transaction.Bill_detail {
+			billDetails = append(billDetails, struct {
+				Id             string        `json:"id"`
+				Transaction_id string        `json:"billId"`
+				Product        entity.Product `json:"product"`
+				Product_price  int           `json:"productPrice"`
+				Qty            int           `json:"qty"`
+			}{
+				Id:             detail.Transaction_detail_id,
+				Transaction_id: detail.Transaction_id,
+				Product: entity.Product{
+					Product_id:   detail.Product.Product_id,
+					Product_name: detail.Product.Product_name,
+					Price:        detail.Product.Price,
+					Unit:         detail.Product.Unit,
+				},
+				Product_price: detail.Product_price,
+				Qty:           detail.Qty,
+			})
+		}
+
+		// Append the transaction and its bill details to the response
+		response.Data = append(response.Data, struct {
+			Id             string        `json:"id"`
+			BillDate       string        `json:"billDate"`
+			EntryDate      string        `json:"entryDate"`
+			FinishDate     string        `json:"finishDate"`
+			Employee       entity.Employee `json:"employee"`
+			Customer       entity.Customer `json:"customer"`
+			BillDetails    []struct {
+				Id             string        `json:"id"`
+				Transaction_id string        `json:"billId"`
+				Product        entity.Product `json:"product"`
+				Product_price  int           `json:"productPrice"`
+				Qty            int           `json:"qty"`
+			} `json:"billDetails"`
+			Total_bill int `json:"totalBill"`
 		}{
 			Id: transaction.Transaction_id,
 			BillDate: transaction.Bill_date,
 			EntryDate: transaction.Entry_date,
 			FinishDate: transaction.Finish_date,
 			Employee: entity.Employee{
-				Employee_id: transaction.Employee.Employee_id,
-				Name: transaction.Employee.Name,
-				Phone_number: transaction.Employee.Phone_number,
-				Address: transaction.Employee.Address,
+				Employee_id:   transaction.Employee.Employee_id,
+				Name:          transaction.Employee.Name,
+				Phone_number:  transaction.Employee.Phone_number,
+				Address:       transaction.Employee.Address,
 			},
 			Customer: entity.Customer{
-				Customer_id: transaction.Customer.Customer_id,
-				Name: transaction.Customer.Name,
-				Phone_number: transaction.Customer.Phone_number,
-				Address: transaction.Customer.Address,
+				Customer_id:   transaction.Customer.Customer_id,
+				Name:          transaction.Customer.Name,
+				Phone_number:  transaction.Customer.Phone_number,
+				Address:       transaction.Customer.Address,
 			},
-			BillDetails: []struct{
-				Id string "json:\"id\""; 
-				Transaction_id string "json:\"billId\""; 
-				Product entity.Product "json:\"product\""; 
-				Product_price int "json:\"productPrice\""; 
-				Qty int "json:\"qty\""
-			}{
-				{
-					Id: transaction.Bill_detail[0].Transaction_detail_id,
-					Transaction_id: transaction.Bill_detail[0].Transaction_id,
-					// Product
-					Product: entity.Product{
-						Product_id: transaction.Bill_detail[0].Product.Product_id,
-						Product_name: transaction.Bill_detail[0].Product.Product_name,
-						Price: transaction.Bill_detail[0].Product.Price,
-						Unit: transaction.Bill_detail[0].Product.Unit,
-					},
-					Product_price: transaction.Bill_detail[0].Product_price,
-					Qty: transaction.Bill_detail[0].Qty,
-				},
-			},
-			Total_bill: transaction.Total_bill,
+			BillDetails: billDetails, // Properly populated for each transaction
+			Total_bill:  transaction.Total_bill,
 		})
 	}
 
+	// If no data is found, return a "not found" response
+	if len(response.Data) == 0 {
+		ctx.JSON(http.StatusNotFound, gin.H{"message": "transaction not found"})
+		return
+	}
+
+	// Return the populated response
 	ctx.JSON(http.StatusOK, response)
+}
+
+func parseDate(dateStr, dateType string) (string, error) {
+    if dateStr == "" {
+        return "", nil
+    }
+
+    parsedDate, err := time.Parse("02-01-2006", dateStr)
+    if err != nil {
+        return "", fmt.Errorf("failed to convert %s. make sure %s format is dd-MM-yyyy. Error: %v", dateType, dateType, err)
+    }
+
+    return parsedDate.Format("2006-01-02"), nil
+}
+
+func buildDateQuery(startDate, endDate, productName string) string {
+    query := ""
+    if startDate != "" {
+		if query != "" {
+            query += " AND"
+        }
+        query += fmt.Sprintf(" t.entry_date >= '%s'", startDate)
+    }
+    if endDate != "" {
+        if query != "" {
+            query += " AND"
+        }
+        query += fmt.Sprintf(" t.finish_date <= '%s'", endDate)
+    }
+	if productName != "" {
+		if query != "" {
+            query += " AND"
+        }
+		query += fmt.Sprintf(" p.product_name LIKE '%%%s%%'", productName)
+	}
+    return query
+}
+
+func buildProductQuery(productName string) string {
+    if productName != "" {
+        return fmt.Sprintf(" p.product_name LIKE '%%%s%%'", productName)
+    }
+    return ""
 }

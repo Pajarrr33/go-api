@@ -10,6 +10,6 @@ type Transaction struct {
 	Finish_date        	string 				`json:"finishDate"`
 	Employee 			Employee 			`json:"employee"`
 	Customer 			Customer			`json:"customer"`
-	Bill_detail 		[1]Transaction_detail  `json:"billDetails"`
+	Bill_detail 		[]Transaction_detail  `json:"billDetails"`
 	Total_bill			int					`json:"totalBill"`
 }
