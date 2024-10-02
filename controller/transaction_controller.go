@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"submission-project-enigma-laundry/entity"
 	"submission-project-enigma-laundry/repository"
-	"time"
-
+	"regexp"
+	"errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -144,6 +144,17 @@ func (tc *transactionController) CreateTransaction(ctx *gin.Context) {
 			return
 		}
 	}
+
+	isDateValid,err := isValidDate(newTransaction.Entry_date,newTransaction.Finish_date,newTransaction.Bill_date)
+	if !isDateValid && err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": "entryDate, finishDate, billDate format is wrong", "details": err.Error()})
+		return
+	}
+
+	if newTransaction.Bill_date != newTransaction.Entry_date {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": "Bill date in future"})
+		return
+	}
 	
 
 	createdTransaction,err := tc.transactionRepository.CreateTransaction(&newTransaction) 
@@ -273,20 +284,9 @@ func (tc *transactionController) ListTransaction(ctx *gin.Context) {
 
 	var transactionQueryParam, transactionDetailQueryParam string
 
-    // Parse the start and end dates
-    startDate, err := parseDate(ctx.Query("startDate"), "start date")
-    if err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-        return
-    }
-    
-    endDate, err := parseDate(ctx.Query("endDate"), "end date")
-    if err != nil {
-        ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-        return
-    }
-
     // Build the product query if productName is provided
+	startDate := ctx.Query("startDate")
+	endDate := ctx.Query("endDate")
     productName := ctx.Query("productName")
 	// Build the transaction date query
     if startDate != "" || endDate != "" || productName != ""{
@@ -439,18 +439,25 @@ func (tc *transactionController) ListTransaction(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-func parseDate(dateStr, dateType string) (string, error) {
-    if dateStr == "" {
-        return "", nil
-    }
+func isValidDate(dates ...string) (bool,error) {
+	// Regular expression for dd/MM/yyyy format
+	var datePattern = `^(0[1-9]|[12][0-9]|3[01])-(0[1-9]|1[0-2])-\d{4}$`
 
-    parsedDate, err := time.Parse("02-01-2006", dateStr)
-    if err != nil {
-        return "", fmt.Errorf("failed to convert %s. make sure %s format is dd-MM-yyyy. Error: %v", dateType, dateType, err)
-    }
+	// Compile the regular expression
+	re := regexp.MustCompile(datePattern)
 
-    return parsedDate.Format("2006-01-02"), nil
+	// Iterate over each date and check if it matches the pattern
+	for _, date := range dates {
+		if !re.MatchString(date) {
+			err := errors.New("the entryDate / finishDate / billDate format is invalid make sure the date format is dd-mm-yyyy")
+			return false,err
+		}
+	}
+
+	// Return true if the date matches the pattern, false otherwise
+	return true,nil
 }
+
 
 func buildDateQuery(startDate, endDate, productName string) string {
     query := ""
@@ -458,13 +465,13 @@ func buildDateQuery(startDate, endDate, productName string) string {
 		if query != "" {
             query += " AND"
         }
-        query += fmt.Sprintf(" t.entry_date >= '%s'", startDate)
+        query += fmt.Sprintf(" TO_DATE(t.entry_date, 'DD-MM-YY') >= TO_DATE('%s', 'DD-MM-YY')", startDate)
     }
     if endDate != "" {
         if query != "" {
             query += " AND"
         }
-        query += fmt.Sprintf(" t.finish_date <= '%s'", endDate)
+        query += fmt.Sprintf(" TO_DATE(t.finish_date, 'DD-MM-YY') <= TO_DATE('%s', 'DD-MM-YY')", endDate)
     }
 	if productName != "" {
 		if query != "" {
