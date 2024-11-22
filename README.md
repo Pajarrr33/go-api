@@ -1,5 +1,5 @@
 
-# Golang API Challenge
+# Golang Laundry App
 This project is a simple Go-based API for managing a laundry shop. It provides CRUD (Create, Read, Update, Delete) operations for customers,employee,product, and transaction and includes validations for data consistency.
 
 
@@ -7,14 +7,14 @@ This project is a simple Go-based API for managing a laundry shop. It provides C
 
 - Golang https://github.com/golang/go
 - Postgree sql https://www.postgresql.org/
-- Gin (HTTP Framework) https://github.com/gin-gonic/gin
+- Gin Gonic (HTTP Framework) https://github.com/gin-gonic/gin
 - Godotenv (enviroment) https://github.com/johogodotenv
 
 ## Installation
 1. Clone this repository
 
 ```bash
-	https://git.enigmacamp.com/enigma-20/ahmad-fajar-shidik/challenge-goapi.git
+	https://github.com/Pajarrr33/laundry-app
 ```
 
 2. Create a database 
@@ -26,7 +26,7 @@ This project is a simple Go-based API for managing a laundry shop. It provides C
 3. Run this DDL query or copy it from DDL.sql File
 
 ```bash
-	CREATE TABLE customer (
+	  CREATE TABLE customer (
         customer_id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         phone_number VARCHAR(255) NOT NULL,
